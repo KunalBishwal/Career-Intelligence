@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AppConfig {
+  id            String    @id @default("singleton")
+  clientId      String?
+  clientSecret  String?
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiry   BigInt?
+  emailAddress  String?
+  authError     Boolean   @default(false)
+  lastSyncedAt  DateTime?
+  syncMonths    Int       @default(12)
+  updatedAt     DateTime  @updatedAt
+}
+
+model GmailAccount {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  accessToken   String?
+  refreshToken  String?
+  tokenExpiry   BigInt?
+  authError     Boolean   @default(false)
+  lastSyncedAt  DateTime?
+  syncMonths    Int       @default(12)
+  isDefault     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  applications  Application[]
+  notifications Notification[]
+
+  @@index([email])
+}
+
+model Application {
+  id            String        @id @default(cuid())
+  company       String
+  companyNorm   String
+  role          String        @default("Unspecified Role")
+  status        String        @default("APPLIED") // APPLIED | IN_REVIEW | INTERVIEW | REJECTED | OFFER
+  source        String
+  appliedAt     DateTime
+  lastUpdatedAt DateTime
+  lastMessageId String
+  rawSubject    String
+
+  accountEmail  String?
+  account       GmailAccount? @relation(fields: [accountEmail], references: [email], onDelete: Cascade)
+
+  @@index([accountEmail])
+  @@index([companyNorm])
+  @@index([status])
+  @@index([appliedAt])
+}
+
+model ProcessedEmail {
+  id             String   @id @default(cuid())
+  gmailMessageId String
+  accountEmail   String?
+  processedAt    DateTime @default(now())
+
+  @@unique([gmailMessageId, accountEmail])
+  @@index([accountEmail])
+}
+
+model Notification {
+  id            String        @id @default(cuid())
+  source        String
+  subject       String
+  receivedAt    DateTime
+  snippet       String
+
+  accountEmail  String?
+  account       GmailAccount? @relation(fields: [accountEmail], references: [email], onDelete: Cascade)
+
+  @@index([accountEmail])
+  @@index([receivedAt])
+}

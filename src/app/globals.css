@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-background: #151416;
+  --color-foreground: #F5F0EA;
+  --color-charcoal: #151416;
+  --color-aubergine: #21152B;
+  --color-lavender: #CBB3E8;
+  --color-chartreuse: #D4FF3F;
+  --color-tomato: #E34234;
+  --color-offwhite: #F5F0EA;
+}
+
+html {
+  background-color: #151416;
+  color: #F5F0EA;
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: #151416;
+  color: #F5F0EA;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #151416;
+}
+::-webkit-scrollbar-thumb {
+  background: #2C1D3A;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #CBB3E8;
+}
+
+/* Subtle Editorial Border & Glow Utilities */
+.border-aubergine-soft {
+  border-color: rgba(61, 40, 82, 0.6);
+}
+
+.border-lavender-subtle {
+  border-color: rgba(203, 179, 232, 0.25);
+}
+
+.border-chartreuse-subtle {
+  border-color: rgba(212, 255, 63, 0.3);
+}
+
+.bg-aubergine-glass {
+  background: rgba(33, 21, 43, 0.75);
+  backdrop-filter: blur(16px);
+}
+
+.bg-charcoal-glass {
+  background: rgba(21, 20, 22, 0.85);
+  backdrop-filter: blur(16px);
+}
