@@ -59,9 +59,6 @@ import {
   Eye,
   Check,
   Zap,
-  Clock,
-  ArrowUpRight,
-  SlidersHorizontal,
 } from "lucide-react";
 
 // Lazy-load the Three.js 3D visual centerpiece with zero SSR hydration mismatch
@@ -199,6 +196,32 @@ function getAvatarColor(name: string): { bg: string; text: string; border: strin
     hash = (hash << 5) - hash + name.charCodeAt(i);
   }
   return colors[Math.abs(hash) % colors.length];
+}
+
+// Custom High-Contrast Tooltip (fixes unreadable dark tooltips in Recharts)
+function CustomChartTooltip({ active, payload, label }: any) {
+  if (active && payload && payload.length) {
+    const item = payload[0];
+    const name = item.name || item.payload?.stage || label || "Metric";
+    const val = item.value;
+    const color = item.payload?.fill || item.payload?.color || item.color || "#CBB3E8";
+
+    return (
+      <div className="rounded-xl border border-[#3D2852] bg-[#1B1224]/95 backdrop-blur-md px-3.5 py-2.5 shadow-2xl text-xs space-y-1 min-w-[130px] animate-in fade-in zoom-in-95">
+        <div className="flex items-center gap-2">
+          <span
+            className="h-2 w-2 rounded-full shrink-0 shadow-[0_0_8px_currentColor]"
+            style={{ backgroundColor: color, color }}
+          />
+          <span className="font-semibold text-[#F5F0EA]">{name}</span>
+        </div>
+        <div className="font-mono text-sm font-bold text-[#F5F0EA] pl-4">
+          {val} {val === 1 ? "application" : "applications"}
+        </div>
+      </div>
+    );
+  }
+  return null;
 }
 
 export default function DashboardPage() {
@@ -563,7 +586,7 @@ export default function DashboardPage() {
     };
   }, [stats]);
 
-  // Palette Chart Colors: Lavender (#CBB3E8), Chartreuse (#D4FF3F), Tomato Red (#E34234), Aubergine
+  // Palette Chart Colors: Lavender (#CBB3E8), Chartreuse (#D4FF3F), Tomato Red (#E34234)
   const funnelData = useMemo(() => {
     if (!data?.charts?.funnelData) return [];
     return data.charts.funnelData.map((item) => {
@@ -581,7 +604,7 @@ export default function DashboardPage() {
     return data.charts.statusDistribution.map((item) => {
       let color = "#CBB3E8";
       if (item.name === "Applied") color = "#CBB3E8";
-      if (item.name === "In Review") color = "#9F85C2";
+      if (item.name === "In Review") color = "#A382CE";
       if (item.name === "Interview") color = "#D4FF3F";
       if (item.name === "Offer") color = "#D4FF3F";
       if (item.name === "Rejected") color = "#E34234"; // Tomato Red accent
@@ -601,11 +624,8 @@ export default function DashboardPage() {
 
   const chartTheme = useMemo(() => {
     return {
-      grid: "#261932",
+      grid: "#2D1D3D",
       text: "#A8A29E",
-      tooltipBg: "#1B1224",
-      tooltipBorder: "#3D2852",
-      tooltipText: "#F5F0EA",
     };
   }, []);
 
@@ -649,7 +669,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-xs text-[#A8A29E]">
-                <span className="h-1.5 w-1.5 rounded-full bg-[#D4FF3F]" />
+                <span className="h-1.5 w-1.5 rounded-full bg-[#D4FF3F] pulse-glow" />
                 <span className="truncate max-w-[170px] sm:max-w-xs font-mono text-[11px] text-[#D8D2CA]">
                   {activeAccount === "ALL" ? "All Inboxes Aggregated" : activeAccount}
                 </span>
@@ -753,7 +773,7 @@ export default function DashboardPage() {
                     </button>
                   </div>
 
-                  {/* Connect Another Gmail (FIXED: single clean label) */}
+                  {/* Connect Another Gmail */}
                   <div className="pt-2 border-t border-[#2C1D3A] mt-1">
                     <a
                       href="/api/auth/google"
@@ -784,7 +804,7 @@ export default function DashboardPage() {
               size="sm"
               onClick={handleSyncNow}
               disabled={syncing}
-              className="gap-2"
+              className="gap-2 shadow-[0_2px_14px_rgba(212,255,63,0.25)] hover:shadow-[0_2px_20px_rgba(212,255,63,0.4)]"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 ${syncing ? "animate-spin text-[#151416]" : ""}`}
@@ -806,7 +826,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* 1-Click Fast Account Pills Bar (FIXED: no duplicate plus sign!) */}
+        {/* 1-Click Fast Account Pills Bar */}
         {accounts.length > 0 && (
           <div className="border-t border-[#23172E] bg-[#1A1022]/95 px-4 sm:px-6 py-2 overflow-x-auto flex items-center gap-2">
             <span className="text-[10px] font-mono uppercase tracking-wider text-[#A8A29E] flex items-center gap-1 shrink-0 mr-1">
@@ -857,7 +877,7 @@ export default function DashboardPage() {
               <span>All Inboxes</span>
             </button>
 
-            {/* FIXED Add Gmail Button: Clean single plus icon */}
+            {/* Add Gmail Button */}
             <a
               href="/api/auth/google"
               className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium text-[#D4FF3F] bg-[#D4FF3F]/10 hover:bg-[#D4FF3F]/20 border border-[#D4FF3F]/30 transition-all shrink-0 ml-auto"
@@ -933,19 +953,19 @@ export default function DashboardPage() {
 
               {/* Quick Intelligence Badges */}
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2A1D36] border border-[#3D2852] text-xs">
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2A1D36] border border-[#3D2852] text-xs card-hover">
                   <span className="text-[#A8A29E]">Response Rate</span>
                   <span className="font-mono font-bold text-[#D4FF3F]">
                     {stats?.responseRate ?? 0}%
                   </span>
                 </div>
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2A1D36] border border-[#3D2852] text-xs">
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2A1D36] border border-[#3D2852] text-xs card-hover">
                   <span className="text-[#A8A29E]">Interview Ratio</span>
                   <span className="font-mono font-bold text-[#CBB3E8]">
                     {intelligence.interviewRate}%
                   </span>
                 </div>
-                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2A1D36] border border-[#3D2852] text-xs">
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-[#2A1D36] border border-[#3D2852] text-xs card-hover">
                   <span className="text-[#A8A29E]">Active In-Flight</span>
                   <span className="font-mono font-bold text-[#F5F0EA]">
                     {intelligence.inFlight} roles
@@ -967,7 +987,7 @@ export default function DashboardPage() {
         {/* KPI INTELLIGENCE METRIC CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {/* Total Applications (Lavender Surface Accent) */}
-          <Card className="gsap-kpi bg-[#21152B] border-[#3D2852] hover:border-[#CBB3E8]/40 transition-all">
+          <Card className="gsap-kpi card-hover bg-[#21152B] border-[#3D2852] hover:border-[#CBB3E8]/40">
             <CardHeader className="p-4 pb-2">
               <CardDescription className="flex items-center justify-between text-xs font-mono text-[#A8A29E]">
                 <span>Total Applications</span>
@@ -986,7 +1006,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Responses Received (Lavender Highlight) */}
-          <Card className="gsap-kpi bg-[#21152B] border-[#3D2852] hover:border-[#CBB3E8]/40 transition-all">
+          <Card className="gsap-kpi card-hover bg-[#21152B] border-[#3D2852] hover:border-[#CBB3E8]/40">
             <CardHeader className="p-4 pb-2">
               <CardDescription className="flex items-center justify-between text-xs font-mono text-[#A8A29E]">
                 <span>Responses Received</span>
@@ -1002,7 +1022,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Interviews & Tests (Chartreuse Accent) */}
-          <Card className="gsap-kpi bg-[#21152B] border-[#3D2852] hover:border-[#D4FF3F]/50 transition-all">
+          <Card className="gsap-kpi card-hover bg-[#21152B] border-[#3D2852] hover:border-[#D4FF3F]/50">
             <CardHeader className="p-4 pb-2">
               <CardDescription className="flex items-center justify-between text-xs font-mono text-[#A8A29E]">
                 <span>Interviews &amp; Tests</span>
@@ -1018,7 +1038,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Confirmed Rejections (Tomato Red Accent - Used Sparingly) */}
-          <Card className="gsap-kpi bg-[#21152B] border-[#3D2852] hover:border-[#E34234]/50 transition-all">
+          <Card className="gsap-kpi card-hover bg-[#21152B] border-[#3D2852] hover:border-[#E34234]/50">
             <CardHeader className="p-4 pb-2">
               <CardDescription className="flex items-center justify-between text-xs font-mono text-[#A8A29E]">
                 <span>Confirmed Rejections</span>
@@ -1036,7 +1056,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Response Rate (Chartreuse Highlight) */}
-          <Card className="gsap-kpi col-span-2 md:col-span-1 bg-[#21152B] border-[#3D2852] hover:border-[#D4FF3F]/50 transition-all">
+          <Card className="gsap-kpi card-hover col-span-2 md:col-span-1 bg-[#21152B] border-[#3D2852] hover:border-[#D4FF3F]/50">
             <CardHeader className="p-4 pb-2">
               <CardDescription className="flex items-center justify-between text-xs font-mono text-[#A8A29E]">
                 <span>Response Rate</span>
@@ -1055,7 +1075,7 @@ export default function DashboardPage() {
         {/* SOPHISTICATED DATA VISUALIZATION SECTION */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Funnel Chart: Clean Editorial Aesthetic */}
-          <Card className="gsap-chart bg-[#21152B] border-[#3D2852]">
+          <Card className="gsap-chart card-hover bg-[#21152B] border-[#3D2852]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-[#F5F0EA] flex items-center justify-between">
                 <span>Application Funnel</span>
@@ -1066,7 +1086,7 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <div className="h-[220px] w-full">
+              <div className="h-[230px] w-full">
                 {funnelData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
@@ -1092,19 +1112,11 @@ export default function DashboardPage() {
                         fontSize={11}
                         width={70}
                       />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          borderColor: chartTheme.tooltipBorder,
-                          color: chartTheme.tooltipText,
-                          borderRadius: "12px",
-                          fontSize: "12px",
-                        }}
-                      />
+                      <Tooltip content={<CustomChartTooltip />} />
                       <Bar
                         dataKey="count"
                         radius={[0, 6, 6, 0]}
-                        animationDuration={600}
+                        animationDuration={700}
                       >
                         {funnelData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
@@ -1122,7 +1134,7 @@ export default function DashboardPage() {
           </Card>
 
           {/* Submission Activity Timeline (Lavender Area Gradient) */}
-          <Card className="gsap-chart bg-[#21152B] border-[#3D2852]">
+          <Card className="gsap-chart card-hover bg-[#21152B] border-[#3D2852]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-[#F5F0EA] flex items-center justify-between">
                 <span>Activity Timeline</span>
@@ -1133,7 +1145,7 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <div className="h-[220px] w-full">
+              <div className="h-[230px] w-full">
                 {data?.charts?.timelineData && data.charts.timelineData.length > 0 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart
@@ -1161,22 +1173,14 @@ export default function DashboardPage() {
                         fontSize={11}
                         allowDecimals={false}
                       />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          borderColor: chartTheme.tooltipBorder,
-                          color: chartTheme.tooltipText,
-                          borderRadius: "12px",
-                          fontSize: "12px",
-                        }}
-                      />
+                      <Tooltip content={<CustomChartTooltip />} />
                       <Area
                         type="monotone"
                         dataKey="applications"
                         stroke="#CBB3E8"
                         strokeWidth={2}
                         fill="url(#lavenderGrad)"
-                        animationDuration={600}
+                        animationDuration={700}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -1189,8 +1193,8 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          {/* Status Distribution Donut */}
-          <Card className="gsap-chart bg-[#21152B] border-[#3D2852]">
+          {/* Status Distribution Donut with Centered Metric & Legend (FIXED Tooltip & Clarity) */}
+          <Card className="gsap-chart card-hover bg-[#21152B] border-[#3D2852]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-semibold text-[#F5F0EA] flex items-center justify-between">
                 <span>Status Breakdown</span>
@@ -1201,41 +1205,72 @@ export default function DashboardPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-2">
-              <div className="h-[220px] w-full">
-                {statusDistribution.length > 0 ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={statusDistribution}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={75}
-                        paddingAngle={3}
-                        dataKey="value"
-                        animationDuration={600}
-                      >
-                        {statusDistribution.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: chartTheme.tooltipBg,
-                          borderColor: chartTheme.tooltipBorder,
-                          color: chartTheme.tooltipText,
-                          borderRadius: "12px",
-                          fontSize: "12px",
-                        }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-[#A8A29E]">
-                    No status data to display.
+              {statusDistribution.length > 0 ? (
+                <div className="space-y-3">
+                  {/* Donut Container with Centered Metric Counter */}
+                  <div className="relative h-[160px] w-full flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={statusDistribution}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={52}
+                          outerRadius={74}
+                          paddingAngle={3}
+                          dataKey="value"
+                          animationDuration={700}
+                        >
+                          {statusDistribution.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.color}
+                              stroke="#21152B"
+                              strokeWidth={2}
+                              className="hover:opacity-85 transition-opacity cursor-pointer"
+                            />
+                          ))}
+                        </Pie>
+                        {/* High-Contrast Custom Tooltip (Eliminates unreadable dark box) */}
+                        <Tooltip content={<CustomChartTooltip />} />
+                      </PieChart>
+                    </ResponsiveContainer>
+
+                    {/* Centered Total Metric Overlay */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="font-mono text-2xl font-black text-[#F5F0EA] tracking-tight">
+                        {stats?.total ?? 0}
+                      </span>
+                      <span className="text-[10px] font-mono tracking-wider uppercase text-[#A8A29E]">
+                        Total
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Interactive Status Legend with Color Swatches */}
+                  <div className="pt-2 border-t border-[#2C1D3A] flex flex-wrap items-center justify-center gap-1.5 text-xs">
+                    {statusDistribution.map((item) => (
+                      <div
+                        key={item.name}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#2A1D36]/80 border border-[#3D2852] text-[11px] transition-all hover:border-[#CBB3E8]/40"
+                      >
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0 shadow-[0_0_6px_currentColor]"
+                          style={{ backgroundColor: item.color, color: item.color }}
+                        />
+                        <span className="text-[#A8A29E]">{item.name}</span>
+                        <span className="font-mono font-bold text-[#F5F0EA] ml-0.5">
+                          {item.value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[220px] flex items-center justify-center text-xs text-[#A8A29E]">
+                  No status data to display.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1395,7 +1430,7 @@ export default function DashboardPage() {
                         return (
                           <tr
                             key={app.id}
-                            className="hover:bg-[#251831] transition-colors group"
+                            className="row-hover transition-colors group"
                           >
                             {/* Company */}
                             <td className="py-3.5 px-4">

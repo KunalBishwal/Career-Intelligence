@@ -43,25 +43,53 @@ body {
   background: #CBB3E8;
 }
 
-/* Subtle Editorial Border & Glow Utilities */
-.border-aubergine-soft {
-  border-color: rgba(61, 40, 82, 0.6);
+/* Subtle Interactive Animations */
+.card-hover {
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease;
 }
 
-.border-lavender-subtle {
-  border-color: rgba(203, 179, 232, 0.25);
+.card-hover:hover {
+  transform: translateY(-2px);
+  border-color: rgba(203, 179, 232, 0.4);
+  box-shadow: 0 12px 32px -8px rgba(33, 21, 43, 0.7);
 }
 
-.border-chartreuse-subtle {
-  border-color: rgba(212, 255, 63, 0.3);
+.row-hover {
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-.bg-aubergine-glass {
-  background: rgba(33, 21, 43, 0.75);
-  backdrop-filter: blur(16px);
+.row-hover:hover {
+  background-color: rgba(44, 29, 58, 0.55);
 }
 
-.bg-charcoal-glass {
-  background: rgba(21, 20, 22, 0.85);
-  backdrop-filter: blur(16px);
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow: 0 0 8px #D4FF3F;
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.15);
+    box-shadow: 0 0 14px #D4FF3F;
+  }
+}
+
+.pulse-glow {
+  animation: pulseGlow 2.5s infinite ease-in-out;
+}
+
+@keyframes floatGentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.float-gentle {
+  animation: floatGentle 4s infinite ease-in-out;
 }
