@@ -200,7 +200,7 @@ function getAvatarColor(name: string): { bg: string; text: string; border: strin
   return colors[Math.abs(hash) % colors.length];
 }
 
-// Custom High-Contrast Tooltip (fixes unreadable dark tooltips in Recharts)
+// Custom High-Contrast Solid Tooltip (100% Opaque, zero bleed-through or translucent text clashing)
 function CustomChartTooltip({ active, payload, label }: any) {
   if (active && payload && payload.length) {
     const item = payload[0];
@@ -209,15 +209,15 @@ function CustomChartTooltip({ active, payload, label }: any) {
     const color = item.payload?.fill || item.payload?.color || item.color || "#CBB3E8";
 
     return (
-      <div className="rounded-xl border border-[#3D2852] bg-[#1B1224]/95 backdrop-blur-md px-3.5 py-2.5 shadow-2xl text-xs space-y-1 min-w-[130px] animate-in fade-in zoom-in-95">
+      <div className="rounded-xl border-2 border-[#4C3364] bg-[#16101E] px-3.5 py-2.5 shadow-[0_12px_36px_rgba(0,0,0,0.95)] text-xs space-y-1 min-w-[130px] z-[100] opacity-100 pointer-events-none select-none">
         <div className="flex items-center gap-2">
           <span
-            className="h-2 w-2 rounded-full shrink-0 shadow-[0_0_8px_currentColor]"
+            className="h-2.5 w-2.5 rounded-full shrink-0 shadow-[0_0_8px_currentColor]"
             style={{ backgroundColor: color, color }}
           />
-          <span className="font-semibold text-[#F5F0EA]">{name}</span>
+          <span className="font-semibold text-[#F5F0EA] tracking-wide">{name}</span>
         </div>
-        <div className="font-mono text-sm font-bold text-[#F5F0EA] pl-4">
+        <div className="font-mono text-sm font-bold text-[#F5F0EA] pl-4.5">
           {val} {val === 1 ? "application" : "applications"}
         </div>
       </div>
@@ -257,8 +257,36 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
-  const [accountBeingDeleted, setAccountBeingDeleted] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  // Dynamic Hovered Donut segment for center total counter
+  const [hoveredPie, setHoveredPie] = useState<{
+    name: string;
+    value: number;
+    color: string;
+  } | null>(null);
+
+  // Custom Toast State
+  const [toasts, setToasts] = useState<
+    Array<{ id: string; title: string; message: string; type: "success" | "danger" | "info" }>
+  >([]);
+
+  // Custom Confirmation Dialogs
+  const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
+  const [showNuclearModal, setShowNuclearModal] = useState<boolean>(false);
+  const [deletingInProgress, setDeletingInProgress] = useState<boolean>(false);
+
+  const addToast = useCallback((title: string, message: string, type: "success" | "danger" | "info" = "success") => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    setToasts((prev) => [...prev, { id, title, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
   const [selectedSource, setSelectedSource] = useState<string>("ALL");
@@ -423,66 +451,72 @@ export default function DashboardPage() {
     }
   }
 
-  // --- Quick Account Disconnect & Wipe ---
-  async function handleDeleteAccount(email: string) {
-    if (
-      !confirm(
-        `Are you sure you want to disconnect ${email}? All applications and stored data for this inbox will be securely wiped.`
-      )
-    ) {
-      return;
-    }
-    setAccountBeingDeleted(email);
+  // --- Quick Account Disconnect & Wipe (Opens Custom Confirmation Modal) ---
+  function initiateDeleteAccount(email: string) {
+    setAccountToDelete(email);
+    setAccountDropdownOpen(false);
+  }
+
+  // --- Nuclear Privacy Wipe (Opens Custom Nuclear Modal) ---
+  function initiateNuclearWipe() {
+    setShowNuclearModal(true);
+    setAccountDropdownOpen(false);
+  }
+
+  // Confirms individual account deletion and triggers toast
+  async function handleConfirmDeleteAccount() {
+    if (!accountToDelete) return;
+    const email = accountToDelete;
+    setDeletingInProgress(true);
     try {
       const res = await fetch(`/api/accounts?email=${encodeURIComponent(email)}`, {
         method: "DELETE",
       });
       if (res.ok) {
-        setSyncMessage(`Inbox ${email} disconnected and private data wiped.`);
+        addToast(
+          "Inbox Disconnected",
+          `Account ${email} and all its stored applications were permanently removed.`,
+          "success"
+        );
         if (activeAccount === email) {
           setActiveAccount("ALL");
         }
         await loadDashboard("ALL");
       } else {
         const err = await res.json();
-        alert(`Failed to remove account: ${err.error || "Unknown error"}`);
+        addToast("Failed to Remove Account", err.error || "Unknown server error", "danger");
       }
     } catch (err: any) {
-      alert(`Failed to remove account: ${err.message}`);
+      addToast("Failed to Remove Account", err.message, "danger");
     } finally {
-      setAccountBeingDeleted(null);
-      setAccountDropdownOpen(false);
+      setDeletingInProgress(false);
+      setAccountToDelete(null);
     }
   }
 
-  // --- Nuclear Privacy Wipe: Wipes all real data and loads demo showcase ---
-  async function handleWipeAllData() {
-    if (
-      !confirm(
-        "⚠️ Nuclear Privacy Wipe: This will permanently delete ALL connected Gmail accounts, tokens, and applications from your database and replace the dashboard with randomized demo data. Proceed?"
-      )
-    ) {
-      return;
-    }
-    setLoading(true);
+  // Confirms nuclear wipe and triggers toast
+  async function handleConfirmNuclearWipe() {
+    setDeletingInProgress(true);
     try {
       const res = await fetch("/api/accounts?all=true", { method: "DELETE" });
       if (res.ok) {
         localStorage.removeItem("preferred_account");
         setActiveAccount("ALL");
-        setSyncMessage(
-          "Privacy wipe complete: All real inboxes and stored data have been permanently wiped. Demo mode active."
+        addToast(
+          "Privacy Wipe Complete",
+          "All personal inboxes and records have been permanently wiped. Demo showcase mode is now active.",
+          "danger"
         );
         await loadDashboard("demo");
       } else {
         const err = await res.json();
-        alert(`Failed to wipe data: ${err.error || "Unknown error"}`);
+        addToast("Wipe Failed", err.error || "Unknown server error", "danger");
       }
     } catch (err: any) {
-      alert(`Failed to wipe data: ${err.message}`);
+      addToast("Wipe Failed", err.message, "danger");
     } finally {
-      setLoading(false);
-      setAccountDropdownOpen(false);
+      setDeletingInProgress(false);
+      setShowNuclearModal(false);
     }
   }
 
@@ -812,7 +846,7 @@ export default function DashboardPage() {
                     ) : (
                       accounts.map((acc) => {
                         const isSelected = activeAccount === acc.email;
-                        const isDeleting = accountBeingDeleted === acc.email;
+                        const isDeleting = deletingInProgress && accountToDelete === acc.email;
                         return (
                           <div
                             key={acc.id}
@@ -853,13 +887,13 @@ export default function DashboardPage() {
                                 title={`Disconnect and wipe data for ${acc.email}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeleteAccount(acc.email);
+                                  initiateDeleteAccount(acc.email);
                                 }}
-                                disabled={isDeleting}
+                                disabled={deletingInProgress}
                                 className="p-1.5 rounded-lg text-[#A8A29E] hover:text-[#E34234] hover:bg-[#E34234]/15 transition-colors"
                               >
                                 <Trash2
-                                  className={`h-3.5 w-3.5 ${isDeleting ? "animate-spin text-[#E34234]" : ""}`}
+                                  className="h-3.5 w-3.5 text-[#E34234]"
                                 />
                               </button>
                             </div>
@@ -916,7 +950,7 @@ export default function DashboardPage() {
 
                     {accounts.length > 0 && (
                       <button
-                        onClick={handleWipeAllData}
+                        onClick={initiateNuclearWipe}
                         className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-[#E34234]/10 hover:bg-[#E34234]/20 border border-[#E34234]/30 hover:border-[#E34234]/60 text-xs text-[#E34234] transition-all font-mono"
                       >
                         <Trash2 className="h-3 w-3" />
@@ -1393,6 +1427,8 @@ export default function DashboardPage() {
                           paddingAngle={3}
                           dataKey="value"
                           animationDuration={700}
+                          onMouseEnter={(_, index) => setHoveredPie(statusDistribution[index])}
+                          onMouseLeave={() => setHoveredPie(null)}
                         >
                           {statusDistribution.map((entry, index) => (
                             <Cell
@@ -1400,22 +1436,28 @@ export default function DashboardPage() {
                               fill={entry.color}
                               stroke="#21152B"
                               strokeWidth={2}
-                              className="hover:opacity-85 transition-opacity cursor-pointer"
+                              className="hover:opacity-90 transition-opacity cursor-pointer"
                             />
                           ))}
                         </Pie>
-                        {/* High-Contrast Custom Tooltip (Eliminates unreadable dark box) */}
-                        <Tooltip content={<CustomChartTooltip />} />
+                        {/* High-Contrast Solid Custom Tooltip (z-100, 100% opaque, zero bleed-through) */}
+                        <Tooltip
+                          wrapperStyle={{ zIndex: 100, pointerEvents: "none" }}
+                          content={<CustomChartTooltip />}
+                        />
                       </PieChart>
                     </ResponsiveContainer>
 
-                    {/* Centered Total Metric Overlay */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="font-mono text-2xl font-black text-[#F5F0EA] tracking-tight">
-                        {stats?.total ?? 0}
+                    {/* Centered Dynamic Metric Overlay (Synchronized with hovered segment) */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[5]">
+                      <span
+                        className="font-mono text-2xl font-black tracking-tight transition-colors duration-200"
+                        style={{ color: hoveredPie ? hoveredPie.color : "#F5F0EA" }}
+                      >
+                        {hoveredPie ? hoveredPie.value : (stats?.total ?? 0)}
                       </span>
                       <span className="text-[10px] font-mono tracking-wider uppercase text-[#A8A29E]">
-                        Total
+                        {hoveredPie ? hoveredPie.name : "Total"}
                       </span>
                     </div>
                   </div>
@@ -1941,6 +1983,156 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Custom Account Disconnect & Wipe Confirmation Modal */}
+      {accountToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F0B14]/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-[#1B1224] border border-[#3D2852] p-6 shadow-2xl relative space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-[#E34234]/20 border border-[#E34234]/40 flex items-center justify-center text-[#E34234]">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-editorial text-lg text-[#F5F0EA] font-medium">
+                  Disconnect Inbox
+                </h3>
+                <p className="text-xs text-[#A8A29E] font-mono">
+                  Data & Privacy Protection
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-[#21152B] border border-[#2C1D3A] p-4 text-xs text-[#D8D2CA] space-y-2">
+              <p>
+                Are you sure you want to disconnect{" "}
+                <span className="font-mono font-bold text-[#F5F0EA]">{accountToDelete}</span>?
+              </p>
+              <p className="text-[#A8A29E]">
+                This will permanently delete all parsed job applications, status history, and Gmail OAuth tokens for this inbox from the database.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setAccountToDelete(null)}
+                disabled={deletingInProgress}
+                className="text-xs text-[#A8A29E] hover:text-[#F5F0EA] hover:bg-[#261932]"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmDeleteAccount}
+                disabled={deletingInProgress}
+                className="gap-2 bg-[#E34234] hover:bg-[#c93528] text-white text-xs font-semibold shadow-[0_2px_12px_rgba(227,66,52,0.3)]"
+              >
+                {deletingInProgress && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                <span>{deletingInProgress ? "Disconnecting..." : "Yes, Disconnect & Wipe"}</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Nuclear Privacy Wipe Confirmation Modal */}
+      {showNuclearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0F0B14]/85 backdrop-blur-md animate-in fade-in">
+          <div className="w-full max-w-md rounded-3xl bg-[#1B1224] border border-[#E34234]/40 p-6 shadow-2xl relative space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-[#E34234]/20 border border-[#E34234]/40 flex items-center justify-center text-[#E34234]">
+                <AlertTriangle className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-editorial text-lg text-[#F5F0EA] font-medium">
+                  Nuclear Privacy Wipe
+                </h3>
+                <p className="text-xs text-[#E34234] font-mono">
+                  Permanent Server Wipeout
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-[#21152B] border border-[#2C1D3A] p-4 text-xs text-[#D8D2CA] space-y-2">
+              <p className="font-semibold text-[#F5F0EA]">
+                Permanently erase ALL connected Gmail accounts, application records, and tokens from this website?
+              </p>
+              <p className="text-[#A8A29E]">
+                The dashboard will immediately switch to randomized demo data, so you can safely share your link or take screenshots without exposing any personal career details.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowNuclearModal(false)}
+                disabled={deletingInProgress}
+                className="text-xs text-[#A8A29E] hover:text-[#F5F0EA] hover:bg-[#261932]"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmNuclearWipe}
+                disabled={deletingInProgress}
+                className="gap-2 bg-[#E34234] hover:bg-[#c93528] text-white text-xs font-semibold shadow-[0_2px_12px_rgba(227,66,52,0.3)]"
+              >
+                {deletingInProgress && <RefreshCw className="h-3.5 w-3.5 animate-spin" />}
+                <span>{deletingInProgress ? "Wiping..." : "Yes, Wipe Everything"}</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Animated Toast Notification Container */}
+      <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2.5 max-w-sm pointer-events-none">
+        {toasts.map((toast) => {
+          const isDanger = toast.type === "danger";
+          const isInfo = toast.type === "info";
+          const borderColor = isDanger
+            ? "border-[#E34234]/50 shadow-[#E34234]/15"
+            : isInfo
+            ? "border-[#CBB3E8]/50 shadow-[#CBB3E8]/15"
+            : "border-[#D4FF3F]/50 shadow-[#D4FF3F]/15";
+          const iconColor = isDanger
+            ? "text-[#E34234]"
+            : isInfo
+            ? "text-[#CBB3E8]"
+            : "text-[#D4FF3F]";
+
+          return (
+            <div
+              key={toast.id}
+              className={`pointer-events-auto rounded-2xl bg-[#1B1224] border ${borderColor} p-4 shadow-2xl flex items-start gap-3 animate-in slide-in-from-bottom-5 duration-300 relative overflow-hidden`}
+            >
+              <div className={`mt-0.5 shrink-0 ${iconColor}`}>
+                {isDanger ? (
+                  <Trash2 className="h-4 w-4" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+              </div>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="text-xs font-mono font-bold text-[#F5F0EA]">
+                  {toast.title}
+                </div>
+                <div className="text-[11px] text-[#A8A29E] leading-relaxed">
+                  {toast.message}
+                </div>
+              </div>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="text-[#A8A29E] hover:text-[#F5F0EA] p-1 -mr-1 -mt-1 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

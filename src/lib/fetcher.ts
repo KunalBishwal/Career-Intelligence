@@ -25,10 +25,13 @@ const BASE_SEARCH_QUERIES = [
   // 3. Interviews, assessments, and coding tests
   '("online assessment" OR "coding assessment" OR "test login credentials" OR "interview invitation" OR "schedule an interview" OR "schedule a call" OR "we\'d like to interview" OR "we\'d like to talk" OR "technical interview" OR "technical assessment" OR "pre-placement talk" OR "hiring process" OR "assessment reminder") -subject:("job alert" OR "newsletter" OR "digest")',
 
-  // 4. Status updates and decisions
-  '("status of your application" OR "update on your application" OR "update regarding your application" OR "update on your candidacy" OR "update from" OR "moving forward with" OR "not moving forward" OR "regret to inform" OR "other candidates" OR "job offer" OR "offer letter") -subject:("job alert" OR "newsletter")',
+  // 4. Job Offers, Letters of Intent (LOI), and hiring confirmations (STRICT & INCLUSIVE)
+  '("letter of intent" OR "loi" OR "offer letter" OR "job offer" OR "offer of employment" OR "employment offer" OR "intent to offer" OR "intent to hire" OR "internship offer" OR "appointment letter" OR "selected for the role" OR "selected for the position" OR "pleased to offer" OR "congratulations on your selection" OR "congratulations! offer" OR "offer discussion" OR "offer rollout" OR "offer cum appointment") -subject:("promotional" OR "sale" OR "discount" OR "newsletter")',
 
-  // 5. Job platform direct applications (LinkedIn, Indeed, Wellfound, Instahyre)
+  // 5. Status updates and decisions
+  '("status of your application" OR "update on your application" OR "update regarding your application" OR "update on your candidacy" OR "update from" OR "moving forward with" OR "not moving forward" OR "regret to inform" OR "other candidates" OR "job offer" OR "offer letter" OR "letter of intent" OR "loi" OR "intent to hire") -subject:("job alert" OR "newsletter")',
+
+  // 6. Job platform direct applications (LinkedIn, Indeed, Wellfound, Instahyre)
   'from:(linkedin.com OR indeed.com OR wellfound.com OR instahyre.com) ("application was sent" OR "application sent" OR "your application to" OR "application received" OR "application submitted" OR "thanks for applying" OR "you applied to" OR "applied to")',
 ];
 
@@ -160,8 +163,14 @@ export async function fetchUnprocessedJobEmails(
   }
 
   const discoveredIds = new Set<string>();
+  const offerCandidateIds = new Set<string>();
 
   for (const rawQuery of queries) {
+    const isOfferQuery =
+      rawQuery.includes("letter of intent") ||
+      rawQuery.includes("loi") ||
+      rawQuery.includes("job offer") ||
+      rawQuery.includes("offer letter");
     const q = `(${rawQuery}) ${afterFilter}`;
     let pageToken: string | undefined = undefined;
 
@@ -177,7 +186,10 @@ export async function fetchUnprocessedJobEmails(
 
       const messages = listRes.data.messages || [];
       for (const msg of messages) {
-        if (msg.id) discoveredIds.add(msg.id);
+        if (msg.id) {
+          discoveredIds.add(msg.id);
+          if (isOfferQuery) offerCandidateIds.add(msg.id);
+        }
       }
 
       pageToken = listRes.data.nextPageToken ?? undefined;
@@ -187,18 +199,44 @@ export async function fetchUnprocessedJobEmails(
   if (discoveredIds.size === 0) return [];
 
   const allIds = Array.from(discoveredIds);
-  const existingRecords = await prisma.processedEmail.findMany({
-    where: {
-      gmailMessageId: { in: allIds },
-      ...(accountEmail ? { accountEmail } : {}),
-    },
-    select: { gmailMessageId: true },
-  });
+  const [existingRecords, existingOffers] = await Promise.all([
+    prisma.processedEmail.findMany({
+      where: {
+        gmailMessageId: { in: allIds },
+        ...(accountEmail ? { accountEmail } : {}),
+      },
+      select: { gmailMessageId: true },
+    }),
+    prisma.application.findMany({
+      where: {
+        status: "OFFER",
+        ...(accountEmail ? { accountEmail } : {}),
+      },
+      select: { lastMessageId: true },
+    }),
+  ]);
+
   const processedSet = new Set(existingRecords.map((r) => r.gmailMessageId));
-  const newIds = allIds.filter((id) => !processedSet.has(id));
+  const confirmedOfferMsgIds = new Set(existingOffers.map((a) => a.lastMessageId));
+
+  // If a message matches Offer/LOI keywords but hasn't produced an OFFER status application,
+  // do not skip it even if it was previously processed by an older filter!
+  const newIds = allIds.filter((id) => {
+    if (offerCandidateIds.has(id) && !confirmedOfferMsgIds.has(id)) {
+      return true;
+    }
+    return !processedSet.has(id);
+  });
+
+  // Prioritize offer/LOI candidates at the very front of the queue
+  newIds.sort((a, b) => {
+    const aOffer = offerCandidateIds.has(a) ? 1 : 0;
+    const bOffer = offerCandidateIds.has(b) ? 1 : 0;
+    return bOffer - aOffer;
+  });
 
   // Cap batch size per sync to stay comfortably within Gmail API per-minute quotas
-  const MAX_PER_SYNC = 50;
+  const MAX_PER_SYNC = 100;
   const targetIds = newIds.slice(0, MAX_PER_SYNC);
 
   const parsedEmails: ParsedEmail[] = [];

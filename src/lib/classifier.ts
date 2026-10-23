@@ -123,13 +123,36 @@ export function matchStatusByRules(
   const b = body.toLowerCase();
   const combined = `${s}\n${b}`;
 
-  // 1. OFFER
+  // 1. OFFER (Includes LOI / Letter of Intent / Intent to Hire)
   if (
-    combined.includes("offer letter") ||
+    s.includes("letter of intent") ||
+    s.includes("offer letter") ||
+    s.includes("job offer") ||
+    s.includes("offer of employment") ||
+    s.includes("employment offer") ||
+    s.includes("intent to offer") ||
+    s.includes("intent to hire") ||
+    s.includes("internship offer") ||
+    s.includes("appointment letter") ||
+    /\b(loi|letter of intent)\b/i.test(s) ||
+    combined.includes("letter of intent") ||
     combined.includes("pleased to extend") ||
+    combined.includes("pleased to offer") ||
+    combined.includes("we are pleased to offer you") ||
+    combined.includes("delighted to offer") ||
+    combined.includes("excited to offer you") ||
+    combined.includes("offer of employment") ||
     combined.includes("formal offer") ||
     combined.includes("job offer") ||
-    s.includes("job offer")
+    combined.includes("offer letter") ||
+    combined.includes("intent to hire") ||
+    combined.includes("intent to offer") ||
+    combined.includes("appointment letter") ||
+    combined.includes("congratulations! we are pleased to offer") ||
+    combined.includes("congratulations on your offer") ||
+    combined.includes("selected for the role") ||
+    combined.includes("selected for the position") ||
+    /\b(loi|letter of intent)\b/i.test(combined)
   ) {
     return "OFFER";
   }
@@ -352,7 +375,7 @@ Rules:
   * "IN_REVIEW" (reviewing your application)
   * "INTERVIEW" (interview invite, online assessment, coding challenge, technical test)
   * "REJECTED" (not moving forward, other candidates, regret to inform)
-  * "OFFER" (job offer extended)
+  * "OFFER" (job offer extended, Letter of Intent / LOI, intent to hire, offer of employment, appointment letter, internship offer, selected for role). CRITICAL: If the email mentions "Letter of Intent", "LOI", "Intent to Offer", "Offer Letter", or "offer of employment", you MUST set status to "OFFER".
 
 Return ONLY valid JSON matching:
 {"kind": "APPLICATION"|"IGNORE", "company": "...", "role": "...", "status": "..."}`;
@@ -486,8 +509,8 @@ export async function persistClassification(
           APPLIED: 1,
           IN_REVIEW: 2,
           INTERVIEW: 3,
-          OFFER: 4,
-          REJECTED: 5,
+          REJECTED: 4,
+          OFFER: 5, // Top priority: An offer or LOI always takes precedence
         };
 
         const existingPrio = statusPriority[existingApp.status as ApplicationStatus] ?? 0;
