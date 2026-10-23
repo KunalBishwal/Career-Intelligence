@@ -34,13 +34,16 @@ export async function getOAuth2Client(accountEmail?: string) {
     where: { id: "singleton" },
   });
 
-  if (!config?.clientId || !config?.clientSecret) {
+  const clientId = config?.clientId || process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = config?.clientSecret || process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
     throw new Error("MISSING_CREDENTIALS");
   }
 
   const oauth2Client = new google.auth.OAuth2(
-    config.clientId,
-    config.clientSecret,
+    clientId,
+    clientSecret,
     getRedirectUri()
   );
 
