@@ -81,9 +81,10 @@ export async function POST(req: Request) {
       }
     }
 
-    const updatedConfig = await prisma.appConfig.update({
+    const updatedConfig = await prisma.appConfig.upsert({
       where: { id: "singleton" },
-      data: { lastSyncedAt: new Date(), authError: false },
+      update: { lastSyncedAt: new Date(), authError: false },
+      create: { id: "singleton", lastSyncedAt: new Date(), authError: false },
     });
 
     return NextResponse.json({

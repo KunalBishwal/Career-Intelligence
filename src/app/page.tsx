@@ -59,7 +59,9 @@ import {
   Eye,
   Check,
   Zap,
+  Sparkles,
 } from "lucide-react";
+import SyncWaitingModal from "@/components/SyncWaitingModal";
 
 // Lazy-load the Three.js 3D visual centerpiece with zero SSR hydration mismatch
 const CareerCenterpiece = dynamic(
@@ -226,6 +228,7 @@ function CustomChartTooltip({ active, payload, label }: any) {
 
 export default function DashboardPage() {
   const [data, setData] = useState<{
+    isDemo?: boolean;
     connection: {
       hasCredentials: boolean;
       isConnected: boolean;
@@ -253,6 +256,8 @@ export default function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [accountBeingDeleted, setAccountBeingDeleted] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<string>("ALL");
@@ -381,14 +386,23 @@ export default function DashboardPage() {
   }
 
   async function handleSyncNow() {
+    setShowSyncModal(true);
     setSyncing(true);
     setSyncMessage(null);
     try {
+      // If currently looking at demo mode without real accounts, simulate fresh sync with demo data
+      if (data?.isDemo && (!data?.accounts || data.accounts.length === 0)) {
+        await new Promise((resolve) => setTimeout(resolve, 4000));
+        setSyncMessage("Demo sync simulated: Neural extraction verified across 14 benchmark companies.");
+        await loadDashboard("demo");
+        return;
+      }
+
       const res = await fetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          accountEmail: activeAccount !== "ALL" ? activeAccount : undefined,
+          accountEmail: activeAccount !== "ALL" && !activeAccount.includes("demo") ? activeAccount : undefined,
         }),
       });
       const result = await res.json();
@@ -405,6 +419,88 @@ export default function DashboardPage() {
       setSyncMessage(`Sync failed: ${err.message}`);
     } finally {
       setSyncing(false);
+      setTimeout(() => setShowSyncModal(false), 800);
+    }
+  }
+
+  // --- Quick Account Disconnect & Wipe ---
+  async function handleDeleteAccount(email: string) {
+    if (
+      !confirm(
+        `Are you sure you want to disconnect ${email}? All applications and stored data for this inbox will be securely wiped.`
+      )
+    ) {
+      return;
+    }
+    setAccountBeingDeleted(email);
+    try {
+      const res = await fetch(`/api/accounts?email=${encodeURIComponent(email)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setSyncMessage(`Inbox ${email} disconnected and private data wiped.`);
+        if (activeAccount === email) {
+          setActiveAccount("ALL");
+        }
+        await loadDashboard("ALL");
+      } else {
+        const err = await res.json();
+        alert(`Failed to remove account: ${err.error || "Unknown error"}`);
+      }
+    } catch (err: any) {
+      alert(`Failed to remove account: ${err.message}`);
+    } finally {
+      setAccountBeingDeleted(null);
+      setAccountDropdownOpen(false);
+    }
+  }
+
+  // --- Nuclear Privacy Wipe: Wipes all real data and loads demo showcase ---
+  async function handleWipeAllData() {
+    if (
+      !confirm(
+        "⚠️ Nuclear Privacy Wipe: This will permanently delete ALL connected Gmail accounts, tokens, and applications from your database and replace the dashboard with randomized demo data. Proceed?"
+      )
+    ) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/accounts?all=true", { method: "DELETE" });
+      if (res.ok) {
+        localStorage.removeItem("preferred_account");
+        setActiveAccount("ALL");
+        setSyncMessage(
+          "Privacy wipe complete: All real inboxes and stored data have been permanently wiped. Demo mode active."
+        );
+        await loadDashboard("demo");
+      } else {
+        const err = await res.json();
+        alert(`Failed to wipe data: ${err.error || "Unknown error"}`);
+      }
+    } catch (err: any) {
+      alert(`Failed to wipe data: ${err.message}`);
+    } finally {
+      setLoading(false);
+      setAccountDropdownOpen(false);
+    }
+  }
+
+  // --- Toggle Demo Showcase Mode ---
+  async function handleToggleDemo() {
+    setLoading(true);
+    try {
+      if (data?.isDemo) {
+        await loadDashboard("ALL");
+      } else {
+        const res = await fetch("/api/applications?demo=true");
+        const json = await res.json();
+        setData(json);
+        if (json.activeAccount) setActiveAccount(json.activeAccount);
+      }
+    } finally {
+      setLoading(false);
+      setAccountDropdownOpen(false);
     }
   }
 
@@ -702,79 +798,106 @@ export default function DashboardPage() {
               </button>
 
               {accountDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-[#1B1224] border border-[#3D2852] p-2 shadow-2xl z-50 animate-in fade-in zoom-in-95">
+                <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-[#1B1224] border border-[#3D2852] p-2.5 shadow-2xl z-50 animate-in fade-in zoom-in-95">
                   <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#A8A29E] flex items-center justify-between border-b border-[#2C1D3A] pb-2 mb-1 font-mono">
                     <span>Connected Gmail Accounts</span>
                     <span className="text-[#D4FF3F]">{accounts.length} active</span>
                   </div>
 
-                  <div className="max-h-60 overflow-y-auto space-y-1 py-1">
-                    {accounts.map((acc) => {
-                      const isSelected = activeAccount === acc.email;
-                      return (
-                        <button
-                          key={acc.id}
-                          onClick={() => handleSelectAccount(acc.email)}
-                          className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
-                            isSelected
-                              ? "bg-[#CBB3E8]/15 border border-[#CBB3E8]/40 text-[#F5F0EA]"
-                              : "hover:bg-[#261932] text-[#D8D2CA] hover:text-[#F5F0EA] border border-transparent"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div
-                              className={`h-7 w-7 rounded-lg flex items-center justify-center font-bold text-xs ${
-                                isSelected
-                                  ? "bg-[#CBB3E8] text-[#151416]"
-                                  : "bg-[#2A1D36] text-[#CBB3E8]"
-                              }`}
+                  <div className="max-h-60 overflow-y-auto space-y-1.5 py-1">
+                    {accounts.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-[#A8A29E] bg-[#21152B]/60 rounded-xl border border-[#2C1D3A]">
+                        No personal inboxes connected.
+                      </div>
+                    ) : (
+                      accounts.map((acc) => {
+                        const isSelected = activeAccount === acc.email;
+                        const isDeleting = accountBeingDeleted === acc.email;
+                        return (
+                          <div
+                            key={acc.id}
+                            className={`w-full flex items-center justify-between p-1.5 rounded-xl transition-all ${
+                              isSelected
+                                ? "bg-[#CBB3E8]/15 border border-[#CBB3E8]/40 text-[#F5F0EA]"
+                                : "hover:bg-[#261932] text-[#D8D2CA] hover:text-[#F5F0EA] border border-transparent"
+                            }`}
+                          >
+                            <button
+                              onClick={() => handleSelectAccount(acc.email)}
+                              className="flex items-center gap-2.5 min-w-0 flex-1 text-left px-1 py-0.5"
                             >
-                              {acc.email.slice(0, 2).toUpperCase()}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="text-xs font-mono font-medium truncate max-w-[155px]">
-                                {acc.email}
+                              <div
+                                className={`h-7 w-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${
+                                  isSelected
+                                    ? "bg-[#CBB3E8] text-[#151416]"
+                                    : "bg-[#2A1D36] text-[#CBB3E8]"
+                                }`}
+                              >
+                                {acc.email.slice(0, 2).toUpperCase()}
                               </div>
-                              <div className="text-[10px] text-[#A8A29E]">
-                                {acc.applicationCount} applications
+                              <div className="min-w-0">
+                                <div className="text-xs font-mono font-medium truncate max-w-[140px]">
+                                  {acc.email}
+                                </div>
+                                <div className="text-[10px] text-[#A8A29E]">
+                                  {acc.applicationCount} applications
+                                </div>
                               </div>
+                            </button>
+
+                            <div className="flex items-center gap-1 shrink-0">
+                              {isSelected && (
+                                <Check className="h-4 w-4 text-[#D4FF3F] mr-0.5" />
+                              )}
+                              <button
+                                title={`Disconnect and wipe data for ${acc.email}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteAccount(acc.email);
+                                }}
+                                disabled={isDeleting}
+                                className="p-1.5 rounded-lg text-[#A8A29E] hover:text-[#E34234] hover:bg-[#E34234]/15 transition-colors"
+                              >
+                                <Trash2
+                                  className={`h-3.5 w-3.5 ${isDeleting ? "animate-spin text-[#E34234]" : ""}`}
+                                />
+                              </button>
                             </div>
                           </div>
-                          {isSelected && (
-                            <Check className="h-4 w-4 text-[#D4FF3F]" />
-                          )}
-                        </button>
-                      );
-                    })}
+                        );
+                      })
+                    )}
 
                     {/* All Accounts Option */}
-                    <button
-                      onClick={() => handleSelectAccount("ALL")}
-                      className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
-                        activeAccount === "ALL"
-                          ? "bg-[#CBB3E8]/15 border border-[#CBB3E8]/40 text-[#F5F0EA]"
-                          : "hover:bg-[#261932] text-[#D8D2CA] hover:text-[#F5F0EA] border border-transparent"
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-7 w-7 rounded-lg bg-[#2A1D36] flex items-center justify-center text-xs font-mono font-bold text-[#D8D2CA]">
-                          ALL
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium">All Accounts View</div>
-                          <div className="text-[10px] text-[#A8A29E]">
-                            Combined view of all inboxes
+                    {accounts.length > 1 && (
+                      <button
+                        onClick={() => handleSelectAccount("ALL")}
+                        className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all ${
+                          activeAccount === "ALL"
+                            ? "bg-[#CBB3E8]/15 border border-[#CBB3E8]/40 text-[#F5F0EA]"
+                            : "hover:bg-[#261932] text-[#D8D2CA] hover:text-[#F5F0EA] border border-transparent"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-7 w-7 rounded-lg bg-[#2A1D36] flex items-center justify-center text-xs font-mono font-bold text-[#D8D2CA]">
+                            ALL
+                          </div>
+                          <div>
+                            <div className="text-xs font-medium">All Inboxes View</div>
+                            <div className="text-[10px] text-[#A8A29E]">
+                              Aggregated multi-inbox analytics
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {activeAccount === "ALL" && (
-                        <Check className="h-4 w-4 text-[#D4FF3F]" />
-                      )}
-                    </button>
+                        {activeAccount === "ALL" && (
+                          <Check className="h-4 w-4 text-[#D4FF3F]" />
+                        )}
+                      </button>
+                    )}
                   </div>
 
-                  {/* Connect Another Gmail */}
-                  <div className="pt-2 border-t border-[#2C1D3A] mt-1">
+                  {/* Actions & Privacy Strip */}
+                  <div className="pt-2 border-t border-[#2C1D3A] mt-1 space-y-1.5">
                     <a
                       href="/api/auth/google"
                       className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-[#261932] hover:bg-[#322143] border border-[#3D2852] hover:border-[#D4FF3F]/40 text-xs font-medium text-[#D4FF3F] transition-all"
@@ -782,6 +905,24 @@ export default function DashboardPage() {
                       <Plus className="h-3.5 w-3.5" />
                       <span>Connect Another Gmail</span>
                     </a>
+
+                    <button
+                      onClick={handleToggleDemo}
+                      className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-[#21152B] hover:bg-[#2C1D3A] border border-[#3D2852] hover:border-[#CBB3E8]/40 text-xs text-[#CBB3E8] transition-all font-mono"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 text-[#CBB3E8]" />
+                      <span>{data?.isDemo ? "Switch to Real Data" : "Preview Demo Showcase"}</span>
+                    </button>
+
+                    {accounts.length > 0 && (
+                      <button
+                        onClick={handleWipeAllData}
+                        className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-[#E34234]/10 hover:bg-[#E34234]/20 border border-[#E34234]/30 hover:border-[#E34234]/60 text-xs text-[#E34234] transition-all font-mono"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        <span>Nuclear Privacy Wipe</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -888,6 +1029,38 @@ export default function DashboardPage() {
           </div>
         )}
       </header>
+
+      {/* Interactive Neural Sync Waiting Modal */}
+      <SyncWaitingModal
+        isOpen={showSyncModal && syncing}
+        onDismiss={() => setShowSyncModal(false)}
+        targetAccount={activeAccount}
+      />
+
+      {/* Demo Showcase Notice Banner */}
+      {data?.isDemo && (
+        <div className="bg-gradient-to-r from-[#21152B] via-[#2D163A] to-[#21152B] border-b border-[#D4FF3F]/30 px-4 sm:px-6 py-2.5">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-[#D8D2CA]">
+              <span className="flex h-2 w-2 rounded-full bg-[#D4FF3F] animate-pulse" />
+              <span className="font-mono text-[#D4FF3F] font-bold uppercase tracking-wider text-[11px]">
+                Privacy Showcase Active
+              </span>
+              <span className="text-[#A8A29E] hidden md:inline">
+                — No personal emails or real job data are exposed. Populated with randomized mock career intelligence.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <a
+                href="/api/auth/google"
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D4FF3F] text-[#151416] font-mono font-bold text-[11px] hover:bg-[#c2ed2c] transition-all shadow-[0_0_12px_rgba(212,255,63,0.3)]"
+              >
+                <Plus className="h-3 w-3" /> Connect Your Gmail
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-8">
         {/* Sync Success Feedback */}

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { startOfWeek, format } from "date-fns";
+import { generateMockDataset } from "@/lib/mockData";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const requestedAccount = searchParams.get("account");
+  const forceDemo = searchParams.get("demo") === "true" || requestedAccount === "demo";
+
+  if (forceDemo) {
+    return NextResponse.json(generateMockDataset());
+  }
 
   // Load config & connected accounts
   const [config, dbAccounts] = await Promise.all([
@@ -37,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   // Determine active account selection
   let activeAccount: string;
-  if (requestedAccount) {
+  if (requestedAccount && requestedAccount !== "demo") {
     activeAccount = requestedAccount;
   } else if (accounts.length > 0) {
     const defaultAcc = accounts.find((a) => a.isDefault) || accounts[0];
@@ -63,6 +69,12 @@ export async function GET(req: NextRequest) {
       take: 30,
     }),
   ]);
+
+  // If no personal accounts exist and no applications exist, automatically populate demo mode
+  // This keeps personal data safe and provides an immediate showcase experience
+  if (accounts.length === 0 && applications.length === 0) {
+    return NextResponse.json(generateMockDataset());
+  }
 
   const total = applications.length;
   const counts: Record<string, number> = {

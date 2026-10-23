@@ -45,27 +45,80 @@ export async function GET() {
 export async function DELETE(req: NextRequest) {
   try {
     const { searchParams } = req.nextUrl;
+    let wipeAll = searchParams.get("all") === "true";
     let email = searchParams.get("email");
 
-    if (!email) {
+    if (!email && !wipeAll) {
       try {
         const body = await req.json();
         email = body.email;
+        if (body.all) wipeAll = true;
       } catch {
         // no body
       }
     }
 
+    // Nuclear Privacy Wipe: Remove all accounts, applications, notifications, and reset tokens
+    if (wipeAll) {
+      await Promise.all([
+        prisma.application.deleteMany({}),
+        prisma.notification.deleteMany({}),
+        prisma.processedEmail.deleteMany({}),
+        prisma.gmailAccount.deleteMany({}),
+      ]);
+
+      await prisma.appConfig.upsert({
+        where: { id: "singleton" },
+        update: {
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiry: null,
+          emailAddress: null,
+          authError: false,
+        },
+        create: {
+          id: "singleton",
+          authError: false,
+        },
+      });
+
+      return NextResponse.json({
+        success: true,
+        wipedAll: true,
+        message: "All personal accounts, tokens, and application data have been permanently wiped.",
+      });
+    }
+
     if (!email) {
       return NextResponse.json(
-        { error: "Account email is required" },
+        { error: "Account email or 'all=true' is required" },
         { status: 400 }
       );
     }
 
-    await prisma.gmailAccount.delete({
-      where: { email },
-    });
+    // Clean up processed email history and the account record (cascades applications & notifications)
+    await Promise.all([
+      prisma.processedEmail.deleteMany({
+        where: { accountEmail: email },
+      }),
+      prisma.gmailAccount.delete({
+        where: { email },
+      }).catch(() => null),
+    ]);
+
+    // Check if this was stored in singleton config
+    const config = await prisma.appConfig.findUnique({ where: { id: "singleton" } });
+    if (config?.emailAddress === email) {
+      await prisma.appConfig.update({
+        where: { id: "singleton" },
+        data: {
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiry: null,
+          emailAddress: null,
+        },
+      }).catch(() => null);
+    }
 
     return NextResponse.json({ success: true, removedEmail: email });
   } catch (err: any) {
