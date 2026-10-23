@@ -65,10 +65,10 @@ export async function getOAuth2Client(accountEmail?: string) {
     }
   }
 
-  const accessToken = targetAccount?.accessToken || config.accessToken;
-  const refreshToken = targetAccount?.refreshToken || config.refreshToken;
-  const tokenExpiry = targetAccount?.tokenExpiry || config.tokenExpiry;
-  const emailToTrack = targetAccount?.email || config.emailAddress;
+  const accessToken = targetAccount?.accessToken || config?.accessToken;
+  const refreshToken = targetAccount?.refreshToken || config?.refreshToken;
+  const tokenExpiry = targetAccount?.tokenExpiry || config?.tokenExpiry;
+  const emailToTrack = targetAccount?.email || config?.emailAddress;
 
   if (accessToken || refreshToken) {
     oauth2Client.setCredentials({
@@ -100,12 +100,19 @@ export async function getOAuth2Client(accountEmail?: string) {
     }
 
     // Mirror to singleton for backwards compatibility
-    await prisma.appConfig.update({
+    await prisma.appConfig.upsert({
       where: { id: "singleton" },
-      data: {
+      update: {
         accessToken: tokens.access_token ?? undefined,
         ...(tokens.refresh_token && { refreshToken: tokens.refresh_token }),
         ...(tokens.expiry_date && { tokenExpiry: BigInt(tokens.expiry_date) }),
+        authError: false,
+      },
+      create: {
+        id: "singleton",
+        accessToken: tokens.access_token ?? null,
+        refreshToken: tokens.refresh_token ?? null,
+        tokenExpiry: tokens.expiry_date ? BigInt(tokens.expiry_date) : null,
         authError: false,
       },
     });
@@ -162,9 +169,10 @@ export async function getAuthorizedGmailClient(accountEmail?: string) {
           data: { authError: true },
         });
       }
-      await prisma.appConfig.update({
+      await prisma.appConfig.upsert({
         where: { id: "singleton" },
-        data: { authError: true },
+        update: { authError: true },
+        create: { id: "singleton", authError: true },
       });
       throw new Error("TOKEN_EXPIRED_RECONNECT_REQUIRED");
     }
